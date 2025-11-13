@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Booth's Algorithm Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Stone & Blue -->
+    <!-- Application Structure Plan: The source report describes a process (an algorithm). The most effective way to make this "explorable" is a task-oriented interactive simulator. The structure is: 1) Input Section (for M, Q), 2) State Dashboard (to view registers A, Q, M, Q-1, Step), 3) Action/Explanation Panel (to state what's happening and why), 4) Controls (Next Step, Reset), 5) Final Result, and 6) A static reference of the algorithm steps. This structure guides the user through the process step-by-step, providing immediate visual feedback and text-based explanations, which is far more usable for learning an algorithm than a static text page. A chart is included to track the value of 'A' over time to meet requirements. -->
+    <!-- Visualization & Content Choices:
+        - Report Info: M, Q, n (inputs). Goal: Start simulation. Viz/Method: HTML <input> fields. Interaction: User types numbers, clicks "Start". Justification: Standard method for user input. Library: HTML/JS.
+        - Report Info: Registers A, Q, M, Q-1, Step Count. Goal: Show algorithm state. Viz/Method: Dynamic HTML <div> blocks (as styled text) with IDs. Interaction: User views these blocks as they update. Justification: Provides clear, real-time visual feedback of the algorithm's internal state. Library: JS/HTML/Tailwind.
+        - Report Info: Algorithm logic (01, 10, shift). Goal: Explain current action. Viz/Method: A dynamic HTML <div> text block. Interaction: User reads the explanation for the current step. Justification: Connects the state change to the algorithm's rules. Library: JS/HTML/Tailwind.
+        - Report Info: N/A (Prompt Requirement). Goal: Fulfill Chart.js req. Viz/Method: Line chart showing decimal value of 'A' vs. step. Interaction: User views chart updating. Justification: Visualizes the change in the accumulator, meeting a technical constraint. Library: Chart.js (Canvas).
+        - Report Info: Algorithm Steps (text). Goal: Provide reference. Viz/Method: Static HTML <ol>. Interaction: User reads for reference. Justification: Provides context for the simulation. Library: HTML/Tailwind.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: "Inter", sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 350px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .mono-font {
+            font-family: 'Courier New', Courier, monospace;
+        }
+    </style>
+</head>
+<body class="bg-stone-50 text-stone-800">
+
+    <main class="container mx-auto max-w-7xl p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-blue-900">Booth's Algorithm Simulator</h1>
+            <p class="text-lg text-stone-600 mt-2">An interactive tool to visualize the 2's complement multiplication process.</p>
+        </header>
+
+        <!-- Setup Section -->
+        <section id="setup-section" class="bg-white p-6 rounded-lg shadow-md border border-stone-200 mb-8">
+            <h2 class="text-2xl font-semibold text-stone-700 mb-4">1. Setup Simulation</h2>
+            <p class="text-stone-600 mb-4">Enter two signed decimal integers. This simulator uses a fixed size of <strong>8 bits</strong> (n=8), so the valid input range is from -128 to 127.</p>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label for="multiplicand" class="block text-sm font-medium text-stone-700">Multiplicand (M)</label>
+                    <input type="number" id="multiplicand" name="multiplicand" value="7" min="-128" max="127" class="mt-1 block w-full rounded-md border-stone-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border">
+                </div>
+                <div>
+                    <label for="multiplier" class="block text-sm font-medium text-stone-700">Multiplier (Q)</label>
+                    <input type="number" id="multiplier" name="multiplier" value="-3" min="-128" max="127" class="mt-1 block w-full rounded-md border-stone-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border">
+                </div>
+                <div class="md:self-end">
+                    <button id="start-btn" class="w-full bg-blue-600 text-white font-semibold py-2 px-4 rounded-md shadow-md hover:bg-blue-700 transition duration-200">Start Simulation</button>
+                </div>
+            </div>
+            <div id="error-box" class="text-red-600 mt-4 text-sm hidden"></div>
+        </section>
+
+        <!-- Simulator Section -->
+        <section id="simulator-section" class="hidden">
+            
+            <!-- State Dashboard -->
+            <div class="mb-8">
+                <h2 class="text-2xl font-semibold text-stone-700 mb-4">2. Simulation State (n=8)</h2>
+                <p class="text-stone-600 mb-4">This dashboard shows the real-time values of the registers. All values are shown in 8-bit 2's complement binary, except for the step counter.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div class="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
+                        <h3 class="text-sm font-semibold text-blue-800 uppercase tracking-wider">Step</h3>
+                        <p id="step-val" class="mono-font text-2xl font-bold text-blue-900">8</p>
+                    </div>
+                     <div class="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
+                        <h3 class="text-sm font-semibold text-blue-800 uppercase tracking-wider">M (Binary)</h3>
+                        <p id="m-val" class="mono-font text-2xl font-bold text-blue-900 overflow-x-auto">00000000</p>
+                    </div>
+                    <div class="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200 lg:col-span-2">
+                        <h3 class="text-sm font-semibold text-blue-800 uppercase tracking-wider">A (Accumulator)</h3>
+                        <p id="a-val" class="mono-font text-2xl font-bold text-blue-900 overflow-x-auto">00000000</p>
+                    </div>
+                    <div class="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200 lg:col-span-2">
+                        <h3 class="text-sm font-semibold text-blue-800 uppercase tracking-wider">Q (Multiplier)</h3>
+                        <p id="q-val" class="mono-font text-2xl font-bold text-blue-900 overflow-x-auto">00000000</p>
+                    </div>
+                    <div class="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
+                        <h3 class="text-sm font-semibold text-blue-800 uppercase tracking-wider">Q₋₁</h3>
+                        <p id="q_neg1-val" class="mono-font text-2xl font-bold text-blue-900">0</p>
+                    </div>
+                    <div class="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
+                        <h3 class="text-sm font-semibold text-blue-800 uppercase tracking-wider">M (Decimal)</h3>
+                        <p id="m-dec-val" class="mono-font text-2xl font-bold text-blue-900">0</p>
+                    </div>
+                     <div class="bg-blue-50 p-4 rounded-lg shadow-sm border border-blue-200">
+                        <h3 class="text-sm font-semibold text-blue-800 uppercase tracking-wider">-M (Decimal)</h3>
+                        <p id="neg-m-dec-val" class="mono-font text-2xl font-bold text-blue-900">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action & Controls -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                <div class="md:col-span-2">
+                    <h2 class="text-2xl font-semibold text-stone-700 mb-4">3. Action & Explanation</h2>
+                    <p class="text-stone-600 mb-4">This panel explains the action taken at each step based on the algorithm's rules. Click "Next Step" to advance the simulation.</p>
+                    <div id="explanation-box" class="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-lg h-32 whitespace-pre-wrap mono-font">Ready to start...</div>
+                    <div class="mt-6 flex space-x-4">
+                        <button id="next-step-btn" class="bg-blue-600 text-white font-semibold py-2 px-6 rounded-md shadow-md hover:bg-blue-700 transition duration-200 disabled:bg-gray-400">Next Step</button>
+                        <button id="reset-btn" class="bg-stone-500 text-white font-semibold py-2 px-6 rounded-md shadow-md hover:bg-stone-600 transition duration-200">Reset</button>
+                    </div>
+                </div>
+
+                <!-- Final Result -->
+                <div class="md:col-span-1">
+                     <h2 class="text-2xl font-semibold text-stone-700 mb-4">4. Final Result</h2>
+                     <p class="text-stone-600 mb-4">After 8 steps, the final 16-bit product will be shown here in both binary and decimal format.</p>
+                    <div id="result-box" class="hidden bg-green-50 border border-green-200 p-4 rounded-lg">
+                        <h3 class="text-sm font-semibold text-green-800 uppercase tracking-wider">Product [A, Q] (Binary)</h3>
+                        <p id="result-bin-val" class="mono-font text-xl font-bold text-green-900 break-words"></p>
+                        <h3 class="text-sm font-semibold text-green-800 uppercase tracking-wider mt-4">Product (Decimal)</h3>
+                        <p id="result-dec-val" class="mono-font text-2xl font-bold text-green-900"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart -->
+            <div class="bg-white p-6 rounded-lg shadow-md border border-stone-200 mb-8">
+                <h2 class="text-2xl font-semibold text-stone-700 mb-4">Accumulator (A) Value Over Time</h2>
+                <p class="text-stone-600 mb-4">This chart tracks the signed decimal value of the Accumulator (A) at the end of each step. This helps visualize how the partial product is built.</p>
+                <div class="chart-container">
+                    <canvas id="a-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Algorithm Reference -->
+            <div class="bg-white p-6 rounded-lg shadow-md border border-stone-200">
+                <h2 class="text-2xl font-semibold text-stone-700 mb-4">Algorithm Reference</h2>
+                <p class="text-stone-600 mb-4">This is the logic the simulator is following, as described in the source report.</p>
+                <ol class="list-decimal list-inside space-y-2 text-stone-600">
+                    <li><strong>Setup:</strong>
+                        <ul class="list-disc list-inside ml-4 mt-1">
+                            <li>Set M = Multiplicand, Q = Multiplier (in 8-bit 2's complement).</li>
+                            <li>Set A = 0 (8 bits).</li>
+                            <li>Set Q₋₁ = 0 (1 bit).</li>
+                            <li>Set counter = 8.</li>
+                        </ul>
+                    </li>
+                    <li><strong>Loop (Repeat 8 times):</strong>
+                        <ul class="list-disc list-inside ml-4 mt-1">
+                            <li>Examine the two bits Q₀ (last bit of Q) and Q₋₁.</li>
+                            <li>If <strong>00</strong> or <strong>11</strong>: Do nothing.</li>
+                            <li>If <strong>01</strong>: Add M to A (A = A + M).</li>
+                            <li>If <strong>10</strong>: Subtract M from A (A = A - M).</li>
+                            <li>Perform an <strong>arithmetic right shift</strong> on the combined [A, Q, Q₋₁] register.</li>
+                            <li>Decrement counter.</li>
+                        </ul>
+                    </li>
+                    <li><strong>Final Answer:</strong>
+                        <ul class="list-disc list-inside ml-4 mt-1">
+                            <li>The 16-bit answer is in the combined [A, Q] registers.</li>
+                        </ul>
+                    </li>
+                </ol>
+            </div>
+
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const BITS = 8;
+
+            const multiplicandInput = document.getElementById('multiplicand');
+            const multiplierInput = document.getElementById('multiplier');
+            const startBtn = document.getElementById('start-btn');
+            const errorBox = document.getElementById('error-box');
+
+            const setupSection = document.getElementById('setup-section');
+            const simulatorSection = document.getElementById('simulator-section');
+            
+            const nextStepBtn = document.getElementById('next-step-btn');
+            const resetBtn = document.getElementById('reset-btn');
+
+            const stepVal = document.getElementById('step-val');
+            const mVal = document.getElementById('m-val');
+            const aVal = document.getElementById('a-val');
+            const qVal = document.getElementById('q-val');
+            const qNeg1Val = document.getElementById('q_neg1-val');
+            const mDecVal = document.getElementById('m-dec-val');
+            const negMDecVal = document.getElementById('neg-m-dec-val');
+            const explanationBox = document.getElementById('explanation-box');
+
+            const resultBox = document.getElementById('result-box');
+            const resultBinVal = document.getElementById('result-bin-val');
+            const resultDecVal = document.getElementById('result-dec-val');
+
+            const chartCanvas = document.getElementById('a-chart');
+            let aChart = null;
+
+            let M_bin, Q_bin, A_bin, Q_neg1_bit;
+            let M_dec, Neg_M_bin;
+            let step;
+            let aHistory = [];
+
+            const toTwosComplement = (num, bits) => {
+                if (num >= 0) {
+                    return num.toString(2).padStart(bits, '0');
+                } else {
+                    let positiveBin = Math.abs(num).toString(2).padStart(bits, '0');
+                    let inverted = [...positiveBin].map(bit => (bit === '0' ? '1' : '0')).join('');
+                    return addBinary(inverted, '1'.padStart(bits, '0'));
+                }
+            };
+
+            const addBinary = (bin1, bin2) => {
+                let sum = '';
+                let carry = 0;
+                const len = bin1.length;
+                for (let i = len - 1; i >= 0; i--) {
+                    const bit1 = parseInt(bin1[i]);
+                    const bit2 = parseInt(bin2[i]);
+                    const s = bit1 + bit2 + carry;
+                    sum = (s % 2) + sum;
+                    carry = Math.floor(s / 2);
+                }
+                return sum.slice(-len);
+            };
+
+            const fromTwosComplement = (binStr) => {
+                if (binStr[0] === '0') {
+                    return parseInt(binStr, 2);
+                } else {
+                    let inverted = [...binStr].map(bit => (bit === '0' ? '1' : '0')).join('');
+                    let addedOne = addBinary(inverted, '1'.padStart(binStr.length, '0'));
+                    return -parseInt(addedOne, 2);
+                }
+            };
+
+            const arithmeticShiftRight = (a, q, qn1) => {
+                const newQn1 = q.slice(-1);
+                const newQ = a.slice(-1) + q.slice(0, -1);
+                const newA = a[0] + a.slice(0, -1);
+                return [newA, newQ, newQn1];
+            };
+
+            const updateUI = () => {
+                stepVal.innerText = step;
+                mVal.innerText = M_bin;
+                aVal.innerText = A_bin;
+                qVal.innerText = Q_bin;
+                qNeg1Val.innerText = Q_neg1_bit;
+                mDecVal.innerText = M_dec;
+                negMDecVal.innerText = -M_dec;
+            };
+
+            const initChart = () => {
+                if (aChart) {
+                    aChart.destroy();
+                }
+                aHistory = [fromTwosComplement(A_bin)];
+                const ctx = chartCanvas.getContext('2d');
+                aChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: aHistory.map((_, i) => `Step ${i}`),
+                        datasets: [{
+                            label: 'Value of A (Decimal)',
+                            data: aHistory,
+                            borderColor: 'rgb(37, 99, 235)',
+                            backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: false
+                            }
+                        }
+                    }
+                });
+            };
+
+            const updateChart = () => {
+                if (aChart) {
+                    aChart.data.labels = aHistory.map((_, i) => `Step ${i}`);
+                    aChart.data.datasets[0].data = aHistory;
+                    aChart.update();
+                }
+            };
+
+            const showFinalResult = () => {
+                const finalBin = A_bin + Q_bin;
+                const finalDec = fromTwosComplement(finalBin);
+                
+                resultBinVal.innerText = `${A_bin} ${Q_bin}`;
+                resultDecVal.innerText = finalDec;
+                
+                const expectedDec = M_dec * fromTwosComplement(toTwosComplement(multiplierInput.value, BITS));
+                
+                if(finalDec === expectedDec) {
+                    resultDecVal.innerText += ` (Correct: ${M_dec} * ${multiplierInput.value} = ${expectedDec})`;
+                    resultBox.classList.remove('bg-red-50', 'border-red-200');
+                    resultBox.classList.add('bg-green-50', 'border-green-200');
+                    resultBinVal.classList.remove('text-red-900');
+                    resultBinVal.classList.add('text-green-900');
+                    resultDecVal.classList.remove('text-red-900');
+                    resultDecVal.classList.add('text-green-900');
+                } else {
+                    resultDecVal.innerText += ` (Error: Expected ${expectedDec})`;
+                    resultBox.classList.add('bg-red-50', 'border-red-200');
+                    resultBox.classList.remove('bg-green-50', 'border-green-200');
+                    resultBinVal.classList.add('text-red-900');
+                    resultBinVal.classList.remove('text-green-900');
+                    resultDecVal.classList.add('text-red-900');
+                    resultDecVal.classList.remove('text-green-900');
+                }
+
+                resultBox.classList.remove('hidden');
+                nextStepBtn.disabled = true;
+            };
+
+            startBtn.addEventListener('click', () => {
+                const m_input = parseInt(multiplicandInput.value);
+                const q_input = parseInt(multiplierInput.value);
+                const min = -Math.pow(2, BITS - 1);
+                const max = Math.pow(2, BITS - 1) - 1;
+
+                if (isNaN(m_input) || isNaN(q_input) || m_input < min || m_input > max || q_input < min || q_input > max) {
+                    errorBox.innerText = `Invalid input. Please enter numbers between ${min} and ${max}.`;
+                    errorBox.classList.remove('hidden');
+                    return;
+                }
+                
+                errorBox.classList.add('hidden');
+                
+                M_dec = m_input;
+                M_bin = toTwosComplement(m_input, BITS);
+                Neg_M_bin = toTwosComplement(-m_input, BITS);
+                Q_bin = toTwosComplement(q_input, BITS);
+                A_bin = '0'.padStart(BITS, '0');
+                Q_neg1_bit = '0';
+                step = BITS;
+
+                updateUI();
+                initChart();
+
+                explanationBox.innerText = `Setup complete.\nReady to start Step ${BITS - step + 1}.`;
+                resultBox.classList.add('hidden');
+                nextStepBtn.disabled = false;
+                
+                setupSection.classList.add('hidden');
+                simulatorSection.classList.remove('hidden');
+            });
+
+            nextStepBtn.addEventListener('click', () => {
+                if (step === 0) {
+                    return;
+                }
+
+                const Q0 = Q_bin.slice(-1);
+                const action = Q0 + Q_neg1_bit;
+                let explanation = `Step ${BITS - step + 1}:\n`;
+                explanation += `Q₀Q₋₁ = ${action}. `;
+
+                switch (action) {
+                    case '01':
+                        A_bin = addBinary(A_bin, M_bin);
+                        explanation += `Perform A = A + M. (A = ${A_bin})`;
+                        break;
+                    case '10':
+                        A_bin = addBinary(A_bin, Neg_M_bin);
+                        explanation += `Perform A = A - M. (A = ${A_bin})`;
+                        break;
+                    case '00':
+                    case '11':
+                        explanation += 'No operation.';
+                        break;
+                }
+
+                [A_bin, Q_bin, Q_neg1_bit] = arithmeticShiftRight(A_bin, Q_bin, Q_neg1_bit);
+                explanation += '\nPerform Arithmetic Right Shift [A, Q, Q₋₁].';
+                
+                step--;
+                
+                aHistory.push(fromTwosComplement(A_bin));
+                updateUI();
+                updateChart();
+                explanationBox.innerText = explanation;
+
+                if (step === 0) {
+                    explanationBox.innerText += '\n\nSimulation complete. See final result.';
+                    showFinalResult();
+                }
+            });
+
+            resetBtn.addEventListener('click', () => {
+                simulatorSection.classList.add('hidden');
+                setupSection.classList.remove('hidden');
+                multiplicandInput.value = '7';
+                multiplierInput.value = '-3';
+                errorBox.classList.add('hidden');
+                if (aChart) {
+                    aChart.destroy();
+                    aChart = null;
+                }
+            });
+        });
+    </script>
+</body>
+</html>
